@@ -23,13 +23,13 @@ cp .env.example .env.local   # EXPO_PUBLIC_API_URL=http://localhost:8000
 
 - 주소에는 호스트와 포트만 적습니다(`/api/v1`은 앱이 붙임). 포트는 백엔드 `API_PORT`와 같아야 합니다.
 - 백엔드는 `MODE=local`에서 `127.0.0.1`에만 열립니다. 실기기(Expo Go)에서 붙으려면 백엔드를 다른 모드로 띄우거나 같은 PC의 웹/시뮬레이터로 실행하세요.
-- 가입하려면 서버 DB에 약관 문서(`policy_documents`)가 등록돼 있어야 합니다.
+- 서버 DB에 약관 문서(`policy_documents`)가 있으면 가입할 때 전부 동의하고, 없으면 동의 없이 가입합니다.
 - 프로젝트 대표 사진을 올리려면 백엔드에 저장소 설정(`KNITTINGLOG_LOCAL_STORAGE_CODE`, `KNITTINGLOG_LOCAL_STORAGE_ROOT`)이 필요합니다.
 
 ### 계정 규칙 (서버 기준)
 
 - 로그인 아이디·계정 ID: 영문 소문자·숫자·`_`·`.` 3~32자, 처음과 끝은 영문·숫자
-- 비밀번호: 15~128자
+- 비밀번호: 12~128자 (서버는 현재 15자 미만을 거부함 — back의 `Security.password`도 12로 바꿔야 함)
 - 가입하면 **비밀번호 복구 코드**를 한 번만 보여 줍니다.
 - 로그인 토큰은 15분마다 자동으로 갱신됩니다(30일간 유지).
 

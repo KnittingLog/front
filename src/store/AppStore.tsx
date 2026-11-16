@@ -690,8 +690,8 @@ const actions = {
     name: string,
   ): Promise<{ error: string } | { recoveryCode: string }> => {
     try {
+      // 서버에 등록된 약관이 있으면 전부 동의하고, 없으면 빈 목록으로 가입한다
       const docs = await server.policyDocuments();
-      if (docs.length === 0) return { error: '서버에 약관 문서가 아직 등록되지 않아 가입할 수 없어요.' };
       const session = await server.register({
         login_id: username,
         handle,
