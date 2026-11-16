@@ -69,8 +69,11 @@ export const dotDate = (iso: string) => {
 };
 
 /** 26.09.10 ~ ing / 26.09.10 ~ 26.09.25 */
-export const period = (m: Pick<Membership, 'startedAt' | 'endedAt'>) =>
-  `${dotDate(m.startedAt)} ~ ${m.endedAt ? dotDate(m.endedAt) : 'ing'}`;
+export const period = (m: Pick<Membership, 'startedAt' | 'endedAt'>) => {
+  // 시작일은 첫 기록 시각이라, 아직 기록이 없으면 비어 있다
+  if (!m.startedAt) return m.endedAt ? `~ ${dotDate(m.endedAt)}` : '기록 전';
+  return `${dotDate(m.startedAt)} ~ ${m.endedAt ? dotDate(m.endedAt) : 'ing'}`;
+};
 
 /** 가장 최근 기록 시각 (없으면 '') */
 export const lastLogAt = (logs: KnitLog[], projectId: string, authorId: string) =>
@@ -83,8 +86,8 @@ export const sortMemberships = (list: Membership[], logs: KnitLog[]) =>
   [...list].sort((a, b) => {
     const s = statusOrder[a.status] - statusOrder[b.status];
     if (s) return s;
-    const la = lastLogAt(logs, a.projectId, a.userId) || a.startedAt;
-    const lb = lastLogAt(logs, b.projectId, b.userId) || b.startedAt;
+    const la = lastLogAt(logs, a.projectId, a.userId);
+    const lb = lastLogAt(logs, b.projectId, b.userId);
     return lb.localeCompare(la);
   });
 

@@ -51,7 +51,7 @@ export function CounterRing({ value, max, size = RING }: { value: number; max: n
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke={value >= max ? '#2E9E6A' : colors.text}
+          stroke={max > 0 && value >= max ? '#2E9E6A' : colors.text}
           strokeWidth={STROKE}
           fill="none"
           strokeLinecap="round"
@@ -99,9 +99,11 @@ function CounterRow({ projectId, counter }: { projectId: string; counter: Counte
         <Ionicons name="add" size={20} color={colors.text} />
       </Pressable>
       <Pressable onPress={reset} style={styles.meta} hitSlop={6} accessibilityLabel={`${counter.label} 초기화`}>
-        <Text style={styles.metaText} numberOfLines={1}>
-          {relative(counter.updatedAt)}
-        </Text>
+        {!!counter.updatedAt && (
+          <Text style={styles.metaText} numberOfLines={1}>
+            {relative(counter.updatedAt)}
+          </Text>
+        )}
         <Ionicons name="refresh" size={14} color={colors.textMuted} />
       </Pressable>
     </View>

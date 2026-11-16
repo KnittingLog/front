@@ -4,9 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AuthField, AuthLayout } from '../components/AuthForm';
 import { Button } from '../components/ui';
-import { DEMO_PASSWORD } from '../data/mock';
 import { useStore } from '../store/AppStore';
-import { colors, fonts } from '../theme';
+import { colors } from '../theme';
 
 export default function LoginScreen() {
   const { actions } = useStore();
@@ -57,13 +56,6 @@ export default function LoginScreen() {
           회원가입
         </Link>
       </View>
-
-      <View style={styles.demo}>
-        <Text style={styles.demoTitle}>데모 계정으로 둘러보기</Text>
-        <Text style={styles.demoText}>
-          seeun · sungyu · jiyeon{'\n'}비밀번호 {DEMO_PASSWORD}
-        </Text>
-      </View>
     </AuthLayout>
   );
 }
@@ -72,7 +64,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 20 },
   muted: { fontSize: 14, color: colors.textSub },
   link: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  demo: { marginTop: 36, padding: 14, borderRadius: 14, backgroundColor: colors.chipBg, alignItems: 'center' },
-  demoTitle: { fontSize: 12, fontWeight: '700', color: colors.textSub, marginBottom: 4 },
-  demoText: { fontSize: 12, lineHeight: 18, color: colors.textSub, fontFamily: fonts.mono, textAlign: 'center' },
 });

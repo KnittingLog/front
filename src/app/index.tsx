@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PostCard } from '../components/PostCard';
@@ -16,10 +16,19 @@ type Filter = 'all' | MemberStatus;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { state } = useStore();
+  const { state, actions } = useStore();
+  const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<Tab>('projects');
   const [filter, setFilter] = useState<Filter>('all');
   const me = state.users[state.meId];
+
+  // 다른 화면에서 돌아오면 서버의 최신 상태(초대·친구 요청·피드)를 다시 받는다
+  useFocusEffect(useCallback(() => actions.refreshIfStale(), [actions]));
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await actions.refresh();
+    setRefreshing(false);
+  };
 
   const mine = useMemo(
     () => sortMemberships(state.memberships.filter((m) => m.userId === state.meId), state.logs),
@@ -42,7 +51,11 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       {/* 두 번째 자식(내 프로젝트/피드 탭)은 스크롤해도 상단에 고정된다 */}
-      <ScrollView stickyHeaderIndices={[1]} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+      <ScrollView
+        stickyHeaderIndices={[1]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
         <View style={[styles.header, styles.container, { paddingTop: 20 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>뜨개로그</Text>
@@ -98,7 +111,8 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            {sections.length === 0 && (
+            {sections.length === 0 && state.loading && <EmptyState emoji="🧶" title="불러오는 중…" />}
+            {sections.length === 0 && !state.loading && (
               <EmptyState
                 emoji="🧶"
                 title={filter === 'all' ? '아직 프로젝트가 없어요' : `${statusStyles[filter].label} 프로젝트가 없어요`}
@@ -123,10 +137,11 @@ export default function HomeScreen() {
         ) : (
           <View style={{ gap: 16, marginTop: 20 }}>
             {posts.length === 0 ? (
-              <EmptyState emoji="📷" title="아직 게시글이 없어요" desc="완성한 작품을 자랑해 보세요!" />
+              <EmptyState emoji="🧶" title="아직 게시글이 없어요" desc="완성한 작품 이야기를 들려주세요!" />
             ) : (
               posts.map((p) => <PostCard key={p.id} post={p} />)
             )}
+            {!!state.feedCursor && <Button title="더 보기" variant="outline" onPress={actions.loadMoreFeed} />}
           </View>
         )}
         </View>

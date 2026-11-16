@@ -1,5 +1,5 @@
-import { API_BASE_URL, API_TIMEOUT_MS } from './config';
-import { getToken } from './token';
+import { API_BASE_URL, API_PREFIX, API_TIMEOUT_MS } from './config';
+import { getTokens, setTokens } from './token';
 
 export type ApiErrorKind = 'network' | 'timeout' | 'http';
 
@@ -14,6 +14,12 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  /** 서버 에러 코드 (예: VERSION_CONFLICT). 백엔드는 항상 { code, message } 로 응답한다 */
+  get code(): string {
+    const b = this.body;
+    return b && typeof b === 'object' && typeof (b as { code?: unknown }).code === 'string' ? (b as { code: string }).code : '';
   }
 }
 
@@ -32,13 +38,13 @@ export interface RequestOptions {
 
 let onUnauthorized: (() => void) | undefined;
 
-/** 401(토큰 만료 등)을 받았을 때 할 일 — 보통 로그아웃 처리 */
+/** 토큰을 갱신할 수 없을 때(세션 만료) 할 일 — 보통 로그아웃 처리 */
 export function setUnauthorizedHandler(handler: (() => void) | undefined) {
   onUnauthorized = handler;
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']) {
-  const url = /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+  const url = /^https?:\/\//.test(path) ? path : `${API_BASE_URL}${API_PREFIX}${path.startsWith('/') ? '' : '/'}${path}`;
   const params = Object.entries(query ?? {})
     .filter(([, v]) => v !== undefined && v !== null)
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
@@ -69,7 +75,45 @@ async function parseBody(res: Response): Promise<unknown> {
   }
 }
 
+let refreshing: Promise<boolean> | null = null;
+
+/** refresh 토큰으로 새 토큰 쌍을 받는다. 동시에 여러 요청이 401을 받아도 한 번만 갱신한다 */
+function refreshTokens(): Promise<boolean> {
+  refreshing ??= (async () => {
+    try {
+      const tokens = await getTokens();
+      if (!tokens) return false;
+      const session = await send<{ access_token: string; refresh_token: string }>('POST', '/auth/refresh', {
+        auth: false,
+        body: { refresh_token: tokens.refresh },
+      });
+      await setTokens({ access: session.access_token, refresh: session.refresh_token });
+      return true;
+    } catch (e) {
+      // 서버에 닿지 못한 경우에는 토큰을 지우지 않는다 (다시 시도할 수 있게)
+      if (e instanceof ApiError && e.kind === 'http') await setTokens(null);
+      return false;
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
+}
+
 export async function request<T = unknown>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  try {
+    return await send<T>(method, path, options);
+  } catch (e) {
+    const expired = e instanceof ApiError && e.status === 401 && options.auth !== false;
+    if (!expired) throw e;
+    // access 토큰이 만료됐으면 한 번 갱신하고 다시 보낸다
+    if (await refreshTokens()) return send<T>(method, path, options);
+    if (!(await getTokens())) onUnauthorized?.();
+    throw e;
+  }
+}
+
+async function send<T>(method: string, path: string, options: RequestOptions): Promise<T> {
   const { query, body, auth = true, timeoutMs = API_TIMEOUT_MS, signal } = options;
 
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
@@ -77,8 +121,8 @@ export async function request<T = unknown>(method: string, path: string, options
   // FormData는 fetch가 boundary를 포함한 Content-Type을 직접 붙인다
   if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (auth) {
-    const token = await getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const tokens = await getTokens();
+    if (tokens) headers.Authorization = `Bearer ${tokens.access}`;
   }
 
   const controller = new AbortController();
@@ -109,7 +153,6 @@ export async function request<T = unknown>(method: string, path: string, options
 
     const data = await parseBody(res);
     if (!res.ok) {
-      if (res.status === 401 && auth) onUnauthorized?.();
       throw new ApiError('http', errorMessage(res.status, data), res.status, data);
     }
     return data as T;
@@ -129,11 +172,13 @@ export const api = {
     request<T>('PUT', path, { ...options, body }),
   patch: <T = unknown>(path: string, body?: unknown, options?: BodylessOptions) =>
     request<T>('PATCH', path, { ...options, body }),
-  delete: <T = unknown>(path: string, options?: BodylessOptions) => request<T>('DELETE', path, options),
+  /** 카운터 삭제처럼 본문이 필요한 DELETE도 있다 */
+  delete: <T = unknown>(path: string, body?: unknown, options?: BodylessOptions) =>
+    request<T>('DELETE', path, { ...options, body }),
 };
 
 /** 백엔드에 닿는지만 확인한다 (응답 코드와 무관하게 응답이 오면 true) */
-export async function pingServer(path = '/') {
+export async function pingServer(path = '/policy-documents') {
   try {
     await request('GET', path, { auth: false, timeoutMs: 3000 });
     return true;

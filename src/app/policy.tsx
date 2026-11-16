@@ -1,14 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { server } from '../api';
+import type { dto } from '../api';
 import { Chip, IconButton } from '../components/ui';
 import { colors } from '../theme';
 
 type DocKey = 'terms' | 'privacy' | 'community';
 
-/** 정책 문서 초안. 서비스 출시 전에 법률 검토를 거쳐 실제 문구로 바꿔야 한다. */
+/** 정책 문서 초안. 서버에 등록된 문서를 받지 못했을 때만 보여 준다. */
 const DOCS: Record<DocKey, { title: string; sections: { h: string; p: string }[] }> = {
   terms: {
     title: '이용약관',
@@ -46,6 +48,21 @@ export default function PolicyScreen() {
   const params = useLocalSearchParams<{ doc?: DocKey }>();
   const [doc, setDoc] = useState<DocKey>(params.doc && params.doc in DOCS ? params.doc : 'terms');
   const current = DOCS[doc];
+  /** 서버에 등록된 현재 정책 문서 (가입할 때 동의하는 문서) */
+  const [serverDocs, setServerDocs] = useState<dto.PolicyDocument[]>([]);
+  const [code, setCode] = useState<string | undefined>(params.doc);
+
+  useEffect(() => {
+    let active = true;
+    server
+      .policyDocuments()
+      .then((docs) => active && setServerDocs(docs))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+  const serverDoc = serverDocs.find((d) => d.code === code) ?? serverDocs[0];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -55,19 +72,33 @@ export default function PolicyScreen() {
         <View style={{ width: 34 }} />
       </View>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 40 }}>
-        <View style={styles.chips}>
-          {(Object.keys(DOCS) as DocKey[]).map((k) => (
-            <Chip key={k} label={DOCS[k].title} active={doc === k} onPress={() => setDoc(k)} />
-          ))}
-        </View>
-        <Text style={styles.draft}>초안 문서예요. 서비스 출시 전에 법률 검토를 거쳐 확정해야 해요.</Text>
-        <Text style={styles.title}>{current.title}</Text>
-        {current.sections.map((s) => (
-          <View key={s.h} style={{ marginBottom: 18 }}>
-            <Text style={styles.h}>{s.h}</Text>
-            <Text style={styles.p}>{s.p}</Text>
-          </View>
-        ))}
+        {serverDoc ? (
+          <>
+            <View style={styles.chips}>
+              {serverDocs.map((d) => (
+                <Chip key={d.id} label={d.title} active={serverDoc.id === d.id} onPress={() => setCode(d.code)} />
+              ))}
+            </View>
+            <Text style={styles.title}>{serverDoc.title}</Text>
+            <Text style={styles.p}>{serverDoc.body}</Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.chips}>
+              {(Object.keys(DOCS) as DocKey[]).map((k) => (
+                <Chip key={k} label={DOCS[k].title} active={doc === k} onPress={() => setDoc(k)} />
+              ))}
+            </View>
+            <Text style={styles.draft}>초안 문서예요. 서비스 출시 전에 법률 검토를 거쳐 확정해야 해요.</Text>
+            <Text style={styles.title}>{current.title}</Text>
+            {current.sections.map((s) => (
+              <View key={s.h} style={{ marginBottom: 18 }}>
+                <Text style={styles.h}>{s.h}</Text>
+                <Text style={styles.p}>{s.p}</Text>
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
     </View>
   );

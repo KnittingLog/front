@@ -9,14 +9,26 @@ import { MemberStatus, Membership, Project } from '../types';
 import { showAlert } from '../utils/alert';
 import { Avatar, Button, Sheet, statusDescriptions } from './ui';
 
+/** 앨범에서 사진을 골라 data URI로 돌려준다 */
 export async function pickImage(): Promise<string | undefined> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
     showAlert('권한 필요', '사진 접근 권한을 허용해 주세요.');
     return;
   }
-  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [1, 1] });
-  return !res.canceled && res.assets[0] ? res.assets[0].uri : undefined;
+  const res = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.7,
+    allowsEditing: true,
+    aspect: [1, 1],
+    // 서버에는 Base64로 올린다
+    base64: true,
+  });
+  const asset = !res.canceled ? res.assets[0] : undefined;
+  if (!asset) return;
+  if (asset.base64) return `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`;
+  // 웹은 uri가 이미 data URI로 온다
+  return asset.uri.startsWith('data:') ? asset.uri : undefined;
 }
 
 /** 수정: 방장은 이름·대표 사진, 모든 멤버는 본인의 실·바늘 */
@@ -28,12 +40,14 @@ export function EditProjectSheet({ project, membership, onClose }: { project: Pr
   const [yarn, setYarn] = useState(membership.yarn);
   const [needle, setNeedle] = useState(membership.needle);
 
-  const save = () => {
-    if (isOwner) {
-      if (!title.trim()) return showAlert('프로젝트 이름을 입력해 주세요');
-      actions.updateProject(project.id, { title: title.trim(), coverUri });
-    }
-    actions.updateMembership(project.id, { yarn: yarn.trim(), needle: needle.trim() });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (isOwner && !title.trim()) return showAlert('프로젝트 이름을 입력해 주세요');
+    setSaving(true);
+    if (isOwner) await actions.updateProject(project.id, { title: title.trim(), coverUri });
+    await actions.updateMembership(project.id, { yarn: yarn.trim(), needle: needle.trim() });
+    setSaving(false);
     onClose();
   };
 
@@ -60,7 +74,7 @@ export function EditProjectSheet({ project, membership, onClose }: { project: Pr
       <Field label="내 바늘" value={needle} onChangeText={setNeedle} placeholder="예: 5.0mm 대바늘" />
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
         <Button title="취소" variant="outline" onPress={onClose} style={{ flex: 1 }} />
-        <Button title="저장" onPress={save} style={{ flex: 1.3 }} />
+        <Button title={saving ? '저장 중…' : '저장'} onPress={save} disabled={saving} style={{ flex: 1.3 }} />
       </View>
     </Sheet>
   );
@@ -71,6 +85,7 @@ export function InviteSheet({ project, onClose }: { project: Project; onClose: (
   const { state, actions } = useStore();
   const memberIds = membersOf(state, project.id).map((m) => m.userId);
   const friends = state.friendIds.filter((id) => !memberIds.includes(id) && !state.hiddenIds.includes(id));
+  // 이 기기에서 보낸 초대만 알 수 있다 (서버에 보낸 초대 목록 API가 없다)
   const invited = state.invites.filter((i) => i.projectId === project.id).map((i) => i.to);
 
   return (
@@ -105,8 +120,8 @@ export function TransferSheet({ project, onClose, onDone }: { project: Project; 
       { text: '취소', style: 'cancel' },
       {
         text: '양도',
-        onPress: () => {
-          actions.transferOwner(project.id, userId);
+        onPress: async () => {
+          if (!(await actions.transferOwner(project.id, userId))) return;
           onClose();
           onDone?.();
         },
