@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,11 +31,25 @@ export default function ProjectDetailScreen() {
   const [editor, setEditor] = useState<EditorMode | null>(null);
   const [sheet, setSheet] = useState<SheetName>(null);
   const [barHeight, setBarHeight] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  // 멤버 전원의 기록과 내 카운터·타이머를 서버에서 받아 온다
+  useEffect(() => {
+    let active = true;
+    actions.loadProject(id).finally(() => active && setLoaded(true));
+    return () => {
+      active = false;
+    };
+  }, [id, actions]);
 
   if (!project || !me) {
     return (
       <View style={[styles.flex, { paddingTop: insets.top + 40 }]}>
-        <EmptyState emoji="🧶" title="프로젝트를 찾을 수 없어요" desc="삭제됐거나 참여하지 않은 프로젝트예요." />
+        {loaded ? (
+          <EmptyState emoji="🧶" title="프로젝트를 찾을 수 없어요" desc="삭제됐거나 참여하지 않은 프로젝트예요." />
+        ) : (
+          <EmptyState emoji="🧶" title="불러오는 중…" />
+        )}
         <Button title="돌아가기" variant="outline" onPress={() => router.back()} style={{ alignSelf: 'center' }} />
       </View>
     );
@@ -70,9 +84,9 @@ export default function ProjectDetailScreen() {
       {
         text: '나가기',
         style: 'destructive',
-        onPress: () => {
-          const newId = actions.leaveProject(project.id);
-          router.replace(`/project/${newId}`);
+        onPress: async () => {
+          const newId = await actions.leaveProject(project.id);
+          if (newId) router.replace(`/project/${newId}`);
         },
       },
     ]);
@@ -95,9 +109,8 @@ export default function ProjectDetailScreen() {
       {
         text: '삭제',
         style: 'destructive',
-        onPress: () => {
-          actions.deleteProject(project.id);
-          router.back();
+        onPress: async () => {
+          if (await actions.deleteProject(project.id)) router.back();
         },
       },
     ]);
@@ -141,11 +154,16 @@ export default function ProjectDetailScreen() {
     },
   ];
 
-  const saveLog = (input: LogInput) => {
-    if (editor?.kind === 'edit') actions.updateLog(editor.log.id, input);
-    else actions.addLog(project.id, input);
-    if (editor?.kind === 'timer') actions.timerReset(project.id);
-    setEditor(null);
+  const saveLog = async (input: LogInput) => {
+    const ok =
+      editor?.kind === 'edit'
+        ? await actions.updateLog(editor.log.id, input)
+        : editor?.kind === 'timer'
+          ? // 타이머 기록은 서버가 잰 시간으로 만들어진다
+            await actions.finishTimer(project.id, input.text)
+          : await actions.addLog(project.id, input);
+    // 실패하면 쓰던 내용을 잃지 않게 창을 열어 둔다
+    if (ok) setEditor(null);
   };
 
   const isFriend = state.friendIds.includes(viewing.userId);
@@ -302,7 +320,7 @@ export default function ProjectDetailScreen() {
           onClose={() => setEditor(null)}
           onSave={saveLog}
           onSkip={() => {
-            actions.timerReset(project.id);
+            actions.discardTimer(project.id);
             setEditor(null);
           }}
         />

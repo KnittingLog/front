@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,6 +24,16 @@ export default function UserProfileScreen() {
   const [tab, setTab] = useState<Tab>('logs');
   const [menu, setMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // 프로필, 공개된 기록, 총 뜨개 시간, 게시글을 서버에서 받아 온다
+  useEffect(() => {
+    let active = true;
+    actions.loadUser(id).finally(() => active && setLoaded(true));
+    return () => {
+      active = false;
+    };
+  }, [id, actions]);
 
   const logs = useMemo(
     () => state.logs.filter((l) => l.authorId === id).sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
@@ -47,7 +57,7 @@ export default function UserProfileScreen() {
     return (
       <View style={styles.flex}>
         {header}
-        <EmptyState emoji="🤷" title="사용자를 찾을 수 없어요" />
+        {loaded ? <EmptyState emoji="🤷" title="사용자를 찾을 수 없어요" /> : <EmptyState emoji="🧶" title="불러오는 중…" />}
       </View>
     );
   }
@@ -56,7 +66,8 @@ export default function UserProfileScreen() {
   const blockedMe = !blockedByMe && state.hiddenIds.includes(id);
   const isFriend = state.friendIds.includes(id);
   const canSeeLogs = canViewProfileLogs(state, id);
-  const totalSec = logs.reduce((sum, l) => sum + l.durationSec, 0);
+  // 내 시간은 내 기록에서, 다른 사람은 서버 통계에서 가져온다
+  const totalSec = isMe ? logs.reduce((sum, l) => sum + l.durationSec, 0) : (state.profiles[id]?.totalSec ?? 0);
 
   const block = () =>
     showAlert(`${user.name}님 차단`, '차단하면 서로의 프로필·게시글·기록이 보이지 않고, 친구 관계와 요청·초대가 모두 끊어져요.', [
@@ -119,7 +130,7 @@ export default function UserProfileScreen() {
             <>
               {!!user.bio && <Text style={styles.bio}>{user.bio}</Text>}
               <View style={styles.stats}>
-                <Stat label="프로젝트" value={projectCount} />
+                {isMe && <Stat label="프로젝트" value={projectCount} />}
                 <Stat label="기록" value={canSeeLogs ? logs.length : '-'} />
                 <Stat label="총 뜨개 시간" value={canSeeLogs ? hoursMinutes(totalSec) : '-'} />
                 <Stat label="게시글" value={posts.length} />

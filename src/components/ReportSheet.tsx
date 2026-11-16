@@ -12,8 +12,8 @@ export const REPORT_REASONS: { value: ReportReason; label: string }[] = [
   { value: 'spam', label: '스팸 · 광고' },
   { value: 'abuse', label: '욕설 · 비하 · 괴롭힘' },
   { value: 'inappropriate', label: '부적절한 사진이나 내용' },
-  { value: 'impersonation', label: '사칭' },
-  { value: 'etc', label: '기타' },
+  { value: 'privacy', label: '개인정보 노출' },
+  { value: 'other', label: '기타' },
 ];
 
 /** 유저(또는 게시글) 신고. 열릴 때마다 새로 마운트해서 쓴다. */
@@ -24,10 +24,16 @@ export function ReportSheet({ userId, postId, onClose }: { userId: string; postI
   const [alsoBlock, setAlsoBlock] = useState(false);
   const name = state.users[userId]?.name ?? '사용자';
 
-  const submit = () => {
-    if (!reason) return;
-    actions.report(userId, reason, detail.trim(), postId);
-    if (alsoBlock) actions.block(userId);
+  const [sending, setSending] = useState(false);
+  // 서버는 '기타' 신고에 자세한 내용을 요구한다
+  const needsDetail = reason === 'other' && !detail.trim();
+
+  const submit = async () => {
+    if (!reason || needsDetail || sending) return;
+    setSending(true);
+    const ok = await actions.report(userId, reason, detail.trim(), postId, alsoBlock);
+    setSending(false);
+    if (!ok) return;
     onClose();
     showAlert(
       '신고가 접수됐어요',
@@ -49,7 +55,7 @@ export function ReportSheet({ userId, postId, onClose }: { userId: string; postI
       <TextInput
         value={detail}
         onChangeText={setDetail}
-        placeholder="자세한 내용 (선택)"
+        placeholder={reason === 'other' ? '자세한 내용 (필수)' : '자세한 내용 (선택)'}
         placeholderTextColor={colors.textMuted}
         multiline
         maxLength={300}
@@ -61,7 +67,7 @@ export function ReportSheet({ userId, postId, onClose }: { userId: string; postI
       </Pressable>
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
         <Button title="취소" variant="outline" onPress={onClose} style={{ flex: 1 }} />
-        <Button title="신고하기" onPress={submit} disabled={!reason} style={{ flex: 1.3 }} />
+        <Button title="신고하기" onPress={submit} disabled={!reason || needsDetail || sending} style={{ flex: 1.3 }} />
       </View>
     </Sheet>
   );

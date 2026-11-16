@@ -5,8 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { membersOf, useStore } from '../store/AppStore';
 import { colors, fonts, shadow } from '../theme';
 import { Membership, ProjectInvite } from '../types';
-import { period, relative } from '../utils/format';
-import { Avatar, AvatarStack, Button, StatusBadge, Thumb, monoText } from './ui';
+import { period } from '../utils/format';
+import { AvatarStack, Button, StatusBadge, Thumb, monoText } from './ui';
 
 /** 방장 표시: 👑 이름 */
 export function OwnerTag({ ownerId, size = 12 }: { ownerId: string; size?: number }) {
@@ -27,16 +27,13 @@ export function ProjectCard({ membership }: { membership: Membership }) {
   if (!project) return null;
   const members = membersOf(state, project.id);
   const shared = members.length > 1;
-  const latestPhoto = state.logs
-    .filter((l) => l.projectId === project.id && l.authorId === state.meId && l.photoUri)
-    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]?.photoUri;
 
   return (
     <Pressable
       onPress={() => router.push(`/project/${project.id}`)}
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
     >
-      <Thumb uri={project.coverUri ?? latestPhoto} seed={project.id} size={96} />
+      <Thumb uri={project.coverUri} seed={project.id} size={96} />
       <View style={styles.body}>
         <View style={styles.titleRow}>
           <Text style={styles.title} numberOfLines={1}>
@@ -69,35 +66,26 @@ export function ProjectCard({ membership }: { membership: Membership }) {
   );
 }
 
-/** 받은 프로젝트 초대 카드 */
+/** 받은 프로젝트 초대 카드. 서버는 수락하기 전에는 프로젝트 이름·멤버를 보여 주지 않는다 */
 export function InviteCard({ invite }: { invite: ProjectInvite }) {
-  const { state, actions } = useStore();
-  const project = state.projects.find((p) => p.id === invite.projectId);
-  const from = state.users[invite.from];
-  if (!project) return null;
-  const members = membersOf(state, project.id);
+  const { actions } = useStore();
 
-  const accept = () => {
-    actions.acceptInvite(invite.id);
-    router.push(`/project/${project.id}`);
+  const accept = async () => {
+    const projectId = await actions.acceptInvite(invite.id);
+    if (projectId) router.push(`/project/${projectId}`);
   };
 
   return (
     <View style={[styles.card, styles.invite]}>
-      <Thumb uri={project.coverUri} seed={project.id} size={72} />
+      <Thumb seed={invite.projectId} size={72} />
       <View style={{ flex: 1, gap: 4 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Avatar user={from} size={18} />
-          <Text style={styles.inviteFrom} numberOfLines={1}>
-            {from?.name}님의 초대
-          </Text>
-          <Text style={styles.time}>{relative(invite.createdAt)}</Text>
-        </View>
         <Text style={styles.title} numberOfLines={1}>
-          {project.title}
+          함뜨 프로젝트 초대
         </Text>
-        <View style={[styles.footer, { marginTop: 4 }]}>
-          <AvatarStack users={members.map((m) => state.users[m.userId])} size={20} />
+        <Text style={styles.inviteFrom} numberOfLines={2}>
+          친구가 프로젝트에 초대했어요. 수락하면 프로젝트와 멤버의 기록을 볼 수 있어요.
+        </Text>
+        <View style={[styles.footer, { marginTop: 4, justifyContent: 'flex-end' }]}>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <Button small variant="outline" title="거절" onPress={() => actions.declineInvite(invite.id)} />
             <Button small title="수락" onPress={accept} />
@@ -121,7 +109,6 @@ const styles = StyleSheet.create({
   },
   invite: { borderColor: colors.primaryMuted, backgroundColor: '#FFFBF8', alignItems: 'center' },
   inviteFrom: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textSub },
-  time: { fontSize: 11, color: colors.textMuted },
   body: { flex: 1, gap: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flex: 1, fontSize: 17, fontWeight: '700', color: colors.text, fontFamily: fonts.serif },

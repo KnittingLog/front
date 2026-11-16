@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useStore } from '../store/AppStore';
 import { colors, shadow } from '../theme';
@@ -11,19 +11,22 @@ import { relative } from '../utils/format';
 import { ReportSheet } from './ReportSheet';
 import { ActionMenu, Avatar, IconButton, MenuItem } from './ui';
 
-const tints = ['#E9D5C6', '#D9CFC3', '#E4D9CB', '#D6C4B4', '#E8DCD0'];
-
 /** 커뮤니티 게시글 카드 (작품 자랑) */
 export function PostCard({ post }: { post: Post }) {
   const { state, actions } = useStore();
   const author = state.users[post.authorId];
   const mine = post.authorId === state.meId;
-  const liked = post.likeIds.includes(state.meId);
+  // 서버는 좋아요 수를 알려 주지 않아 내가 눌렀는지만 표시한다
+  const liked = state.likedPostIds.includes(post.id);
   const [menu, setMenu] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState('');
-  const tint = tints[[...post.id].reduce((a, c) => a + c.charCodeAt(0), 0) % tints.length];
+
+  // 댓글은 게시글마다 따로 받아 온다
+  useEffect(() => {
+    actions.loadPostComments(post.id);
+  }, [actions, post.id]);
 
   const openProfile = () => router.push(`/user/${post.authorId}`);
 
@@ -76,36 +79,17 @@ export function PostCard({ post }: { post: Post }) {
         <IconButton name="ellipsis-horizontal" size={20} color={colors.textSub} onPress={() => setMenu(true)} />
       </View>
 
-      <View style={[styles.photo, { backgroundColor: tint }]}>
-        {post.photoUri ? (
-          <Image source={{ uri: post.photoUri }} style={StyleSheet.absoluteFill} />
-        ) : (
-          <Text style={{ fontSize: 48 }}>🧶</Text>
-        )}
-      </View>
-
       <View style={styles.body}>
+        {!!post.text && <Text style={styles.text}>{post.text}</Text>}
         <View style={styles.actions}>
           <Pressable onPress={() => actions.toggleLike(post.id)} style={styles.action} hitSlop={6} accessibilityLabel="좋아요">
             <Ionicons name={liked ? 'heart' : 'heart-outline'} size={24} color={liked ? '#E0475B' : colors.text} />
-            <Text style={styles.count}>{post.likeIds.length}</Text>
           </Pressable>
           <Pressable onPress={() => setShowComments((v) => !v)} style={styles.action} hitSlop={6}>
             <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
             <Text style={styles.count}>{post.comments.length}</Text>
           </Pressable>
         </View>
-        {!!post.projectTitle && (
-          <View style={styles.projectTag}>
-            <Text style={styles.projectTagText}>🧶 {post.projectTitle}</Text>
-          </View>
-        )}
-        {!!post.text && (
-          <Text style={styles.text}>
-            <Text style={{ fontWeight: '700' }}>{author?.name} </Text>
-            {post.text}
-          </Text>
-        )}
         {(post.comments.length > 0 || showComments) && (
           <Pressable onPress={() => setShowComments((v) => !v)} hitSlop={6} style={styles.toggle}>
             <Text style={styles.more}>{showComments ? '댓글 접기' : `댓글 ${post.comments.length}개 보기`}</Text>
@@ -169,27 +153,10 @@ const styles = StyleSheet.create({
   name: { fontSize: 14, fontWeight: '700', color: colors.text },
   time: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
   // 피드에서 사진이 화면을 다 덮지 않도록 여백을 두고 16:10 비율로 줄인다
-  photo: {
-    marginHorizontal: 12,
-    aspectRatio: 16 / 10,
-    borderRadius: 14,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   body: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 14, gap: 6 },
   actions: { flexDirection: 'row', gap: 16 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   count: { fontSize: 14, fontWeight: '600', color: colors.text },
-  projectTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    marginTop: 2,
-  },
-  projectTagText: { fontSize: 12, fontWeight: '600', color: colors.primaryDark },
   text: { fontSize: 14, lineHeight: 21, color: colors.text },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start' },
   more: { fontSize: 13, color: colors.textSub, marginTop: 2 },

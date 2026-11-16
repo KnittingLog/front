@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,10 +39,11 @@ export default function MyPageScreen() {
     }, [goHome]),
   );
 
-  const saveHandle = () => {
+  const saveHandle = async () => {
     const h = normalizeId(handleDraft);
     if (!ID_RE.test(h)) return setHandleError(ID_RULE);
-    const err = actions.updateHandle(h);
+    if (h === me.handle) return setEditingHandle(false);
+    const err = await actions.updateHandle(h);
     if (err) return setHandleError(err);
     setEditingHandle(false);
     setHandleError('');
@@ -58,14 +59,24 @@ export default function MyPageScreen() {
   );
 
   const q = query.trim().toLowerCase().replace(/^@/, '');
-  const searchResults = q
-    ? Object.values(state.users).filter(
-        (u) =>
-          u.id !== state.meId &&
-          !state.hiddenIds.includes(u.id) &&
-          (u.name.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q)),
-      )
-    : [];
+  const [found, setFound] = useState<{ q: string; users: User[] }>({ q: '', users: [] });
+  // 입력이 잠시 멈추면 서버에서 계정 ID·닉네임으로 찾는다
+  useEffect(() => {
+    if (!q) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      actions
+        .searchUsers(q)
+        .then((users) => active && setFound({ q, users }))
+        .catch(() => active && setFound({ q, users: [] }));
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [q, actions]);
+  const searching = !!q && found.q !== q;
+  const searchResults = found.q === q ? found.users.filter((u) => !state.hiddenIds.includes(u.id)) : [];
 
   const saveBio = () => {
     actions.updateBio(bioDraft.trim());
@@ -251,8 +262,8 @@ export default function MyPageScreen() {
 
         {q ? (
           <View style={{ gap: 10 }}>
-            <Text style={styles.resultLabel}>검색 결과 {searchResults.length}</Text>
-            {searchResults.length === 0 && <EmptyState emoji="🔍" title="찾는 뜨개인이 없어요" />}
+            <Text style={styles.resultLabel}>{searching ? '찾는 중…' : `검색 결과 ${searchResults.length}`}</Text>
+            {!searching && searchResults.length === 0 && <EmptyState emoji="🔍" title="찾는 뜨개인이 없어요" />}
             {searchResults.map((u) => (
               <PersonRow key={u.id} user={u} right={relationAction(u)} />
             ))}
@@ -327,17 +338,6 @@ export default function MyPageScreen() {
             ])
           }
         />
-        <Pressable
-          style={{ alignSelf: 'center', marginTop: 20 }}
-          onPress={() =>
-            showAlert('데모 데이터 초기화', '이 기기의 모든 계정과 변경 사항을 지우고 처음 상태로 되돌릴까요? 로그아웃돼요.', [
-              { text: '취소', style: 'cancel' },
-              { text: '초기화', style: 'destructive', onPress: actions.reset },
-            ])
-          }
-        >
-          <Text style={{ color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' }}>데모 데이터 초기화</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );

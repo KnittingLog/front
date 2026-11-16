@@ -3,6 +3,9 @@ import { Platform } from 'react-native';
 
 const DEFAULT_API_URL = 'http://localhost:8000';
 
+/** 백엔드의 모든 업무 API는 /api/v1 아래에 있다 (back: MyBackend.configure) */
+export const API_PREFIX = '/api/v1';
+
 /** 요청이 이 시간 안에 끝나지 않으면 끊는다 */
 export const API_TIMEOUT_MS = 10_000;
 

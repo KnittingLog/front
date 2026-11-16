@@ -1,15 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useStore } from '../store/AppStore';
+import { REACTIONS, useStore } from '../store/AppStore';
 import { colors, fonts } from '../theme';
 import { KnitLog } from '../types';
 import { clockTime, duration, relative, shortDate } from '../utils/format';
 import { ActionMenu, Avatar, IconButton, Thumb } from './ui';
 import { showAlert } from '../utils/alert';
 
-export const EMOJIS = ['❤️', '👏', '🧶', '✨', '🔥', '😍'];
+/** 서버가 허용하는 반응만 고를 수 있다 */
+export const EMOJIS = REACTIONS.map((r) => r.emoji);
 
 export function LogItem({
   log,
@@ -29,8 +30,14 @@ export function LogItem({
   const [showComments, setShowComments] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState('');
-  const [zoom, setZoom] = useState(false);
   const [menu, setMenu] = useState(false);
+  // 반응·댓글은 같은 프로젝트 멤버만 볼 수 있다 (프로필에서 본 남의 기록은 내용만 보인다)
+  const social = !!log.projectId;
+
+  // 반응·댓글은 기록마다 따로 받아 온다
+  useEffect(() => {
+    actions.loadLogSocial(log.id);
+  }, [actions, log.id]);
 
   const confirmDelete = () =>
     showAlert('기록 삭제', '이 기록을 삭제할까요? 되돌릴 수 없어요.', [
@@ -54,9 +61,7 @@ export function LogItem({
   return (
     <View style={styles.row}>
       <View style={styles.left}>
-        <Pressable onPress={() => log.photoUri && setZoom(true)}>
-          <Thumb uri={log.photoUri} seed={log.id} size={88} />
-        </Pressable>
+        <Thumb seed={log.id} size={88} />
         {!isLast && <View style={styles.line} />}
       </View>
 
@@ -73,11 +78,15 @@ export function LogItem({
               {clockTime(log.startedAt)} · {duration(log.durationSec)}
             </Text>
           </View>
-          <IconButton name="happy-outline" size={20} color={colors.primary} onPress={() => setShowPicker((v) => !v)} />
-          <Pressable style={styles.commentBtn} onPress={() => setShowComments((v) => !v)} hitSlop={6}>
-            <Ionicons name="chatbubble-outline" size={18} color={colors.primary} />
-            {log.comments.length > 0 && <Text style={styles.commentCount}>{log.comments.length}</Text>}
-          </Pressable>
+          {social && (
+            <>
+              <IconButton name="happy-outline" size={20} color={colors.primary} onPress={() => setShowPicker((v) => !v)} />
+              <Pressable style={styles.commentBtn} onPress={() => setShowComments((v) => !v)} hitSlop={6}>
+                <Ionicons name="chatbubble-outline" size={18} color={colors.primary} />
+                {log.comments.length > 0 && <Text style={styles.commentCount}>{log.comments.length}</Text>}
+              </Pressable>
+            </>
+          )}
           {mine && onEdit && <IconButton name="ellipsis-horizontal" size={18} color={colors.textSub} onPress={() => setMenu(true)} />}
         </View>
 
@@ -143,7 +152,7 @@ export function LogItem({
                       <Text style={{ fontWeight: '700' }}>{author?.name} </Text>
                       {c.text}
                     </Text>
-                    <Text style={styles.commentTime}>{relative(c.createdAt)}</Text>
+                    {!!c.createdAt && <Text style={styles.commentTime}>{relative(c.createdAt)}</Text>}
                   </View>
                 </Pressable>
               );
@@ -175,12 +184,6 @@ export function LogItem({
           ]}
         />
       )}
-
-      <Modal visible={zoom} transparent animationType="fade" onRequestClose={() => setZoom(false)}>
-        <Pressable style={styles.zoomBg} onPress={() => setZoom(false)}>
-          {log.photoUri && <Image source={{ uri: log.photoUri }} style={styles.zoomImg} resizeMode="contain" />}
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -242,6 +245,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
-  zoomBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
-  zoomImg: { width: '100%', height: '80%' },
 });

@@ -29,14 +29,16 @@ export default function NewProjectScreen() {
   const [status, setStatus] = useState<MemberStatus>('active');
   const [invited, setInvited] = useState<string[]>([]);
   const [coverUri, setCoverUri] = useState<string>();
+  const [creating, setCreating] = useState(false);
 
   const friends = state.friendIds.filter((id) => !state.hiddenIds.includes(id));
   const toggleInvite = (id: string) =>
     setInvited((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
-  const create = () => {
-    if (!title.trim()) return;
-    const id = actions.createProject({
+  const create = async () => {
+    if (!title.trim() || creating) return;
+    setCreating(true);
+    const id = await actions.createProject({
       title: title.trim(),
       yarn: yarn.trim(),
       needle: needle.trim(),
@@ -44,7 +46,8 @@ export default function NewProjectScreen() {
       coverUri,
       inviteIds: invited,
     });
-    router.replace(`/project/${id}`);
+    setCreating(false);
+    if (id) router.replace(`/project/${id}`);
   };
 
   return (
@@ -105,7 +108,12 @@ export default function NewProjectScreen() {
           )}
         </View>
 
-        <Button title="프로젝트 만들기" onPress={create} style={{ marginTop: 24 }} disabled={!title.trim()} />
+        <Button
+          title={creating ? '만드는 중…' : '프로젝트 만들기'}
+          onPress={create}
+          style={{ marginTop: 24 }}
+          disabled={!title.trim() || creating}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );

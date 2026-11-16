@@ -71,7 +71,8 @@ export function CounterManager({ projectId, counters, onClose }: { projectId: st
                       {c.label}
                     </Text>
                     <Text style={styles.itemSub} numberOfLines={1}>
-                      {c.max}단 중 {c.value}단 · {relative(c.updatedAt)}
+                      {c.max > 0 ? `${c.max}단 중 ${c.value}단` : `${c.value}단`}
+                      {c.updatedAt ? ` · ${relative(c.updatedAt)}` : ''}
                     </Text>
                   </View>
                   <IconCircle name="arrow-up" disabled={i === 0} onPress={() => actions.moveCounter(projectId, c.id, -1)} />
@@ -84,7 +85,7 @@ export function CounterManager({ projectId, counters, onClose }: { projectId: st
                   <IconCircle name="pencil" onPress={() => setEditingId(c.id)} bare />
                 </View>
               ))}
-              <Pressable style={styles.add} onPress={() => setEditingId(actions.addCounter(projectId))}>
+              <Pressable style={styles.add} onPress={async () => setEditingId((await actions.addCounter(projectId)) ?? null)}>
                 <Ionicons name="add" size={20} color={colors.text} />
                 <Text style={styles.addText}>단수 카운터 추가</Text>
               </Pressable>
@@ -129,18 +130,19 @@ function CounterEditor({
 }: {
   counter: Counter;
   onBack: () => void;
-  onSave: (patch: Partial<Omit<Counter, 'id'>>) => void;
+  onSave: (patch: Pick<Counter, 'label' | 'value' | 'max'>) => void;
   onDelete: () => void;
 }) {
   const [label, setLabel] = useState(counter.label);
   const [value, setValue] = useState(String(counter.value));
-  const [max, setMax] = useState(String(counter.max));
+  const [max, setMax] = useState(counter.max > 0 ? String(counter.max) : '');
 
   const save = () => {
     const v = Number(value);
-    const m = Number(max);
+    // 목표 단수를 비우면 목표 없이 센다 (서버 기본 카운터 '단'·'코'가 그렇다)
+    const m = max.trim() ? Number(max) : 0;
     if (!Number.isInteger(v) || v < 0) return showAlert('현재 단 확인', '0 이상의 숫자를 입력해 주세요.');
-    if (!Number.isInteger(m) || m < 1) return showAlert('목표 단수 확인', '1 이상의 숫자를 입력해 주세요.');
+    if (!Number.isInteger(m) || m < 0) return showAlert('목표 단수 확인', '1 이상의 숫자를 입력하거나 비워 두세요.');
     onSave({ label: label.trim() || counter.label, value: v, max: m });
   };
 
