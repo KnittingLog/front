@@ -65,6 +65,7 @@ npm run typecheck
 src/
   app/            # Expo Router 화면
   components/     # UI 컴포넌트 (카드, 타이머, 기록, 기록 작성 시트 등)
+  api/            # 백엔드 연결 (fetch 클라이언트, 주소 설정, 인증 토큰)
   store/          # 전역 상태 (Context + useReducer, AsyncStorage에 저장)
   data/mock.ts    # 데모 데이터
   theme.ts        # 색상·폰트 토큰
