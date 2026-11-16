@@ -23,7 +23,7 @@ cp .env.example .env.local   # EXPO_PUBLIC_API_URL=http://localhost:8000
 
 - 주소에는 호스트와 포트만 적습니다(`/api/v1`은 앱이 붙임). 포트는 백엔드 `API_PORT`와 같아야 합니다.
 - 백엔드는 `MODE=local`에서 `127.0.0.1`에만 열립니다. 실기기(Expo Go)에서 붙으려면 백엔드를 다른 모드로 띄우거나 같은 PC의 웹/시뮬레이터로 실행하세요.
-- 가입하려면 서버 DB에 약관 문서(`policy_documents`)가 등록돼 있어야 합니다.
+- 서버 DB에 약관 문서(`policy_documents`)가 있으면 가입할 때 전부 동의하고, 없으면 동의 없이 가입합니다.
 - 프로젝트 대표 사진을 올리려면 백엔드에 저장소 설정(`KNITTINGLOG_LOCAL_STORAGE_CODE`, `KNITTINGLOG_LOCAL_STORAGE_ROOT`)이 필요합니다.
 
 ### 계정 규칙 (서버 기준)
